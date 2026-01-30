@@ -1,34 +1,28 @@
-name: Supabase Keep Warm (Debug)
+name: Supabase Keep Warm(mixqbynkcstfjpmgujjp - "leehack21-hilee")
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *' # 매일 자정 실행
   workflow_dispatch:
 
 jobs:
-  debug_connection:
+  wake_up:
     runs-on: ubuntu-latest
     steps:
-      - name: Check API Response
+      - name: Send Keep-Warm Request
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          echo "Connecting to: $SUPABASE_URL"
-          
-          # -v 옵션으로 상세 통신 내용을 보고, 에러 메시지를 화면에 출력합니다.
-          response_code=$(curl -s -o response.txt -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/" \
+          # Supabase REST API 루트를 호출하여 인스턴스를 깨웁니다.
+          # service_role 키를 사용하므로 권한 문제없이 200 OK가 떨어집니다.
+          status_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
-          
-          echo "Status Code: $response_code"
-          echo "--- Server Message ---"
-          cat response.txt
-          echo "----------------------"
-          
-          if [ "$response_code" -eq 200 ]; then
-            echo "Success!"
+
+          if [ "$status_code" -eq 200 ]; then
+            echo "✅ Success! Supabase is active."
           else
-            echo "Failed. Check the message above."
+            echo "❌ Failed with status code: $status_code"
             exit 1
           fi
