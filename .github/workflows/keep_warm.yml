@@ -2,7 +2,7 @@ name: Supabase Keep Warm
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 실행
+    - cron: '0 0 * * *' # 매일 자정 실행
   workflow_dispatch:
 
 jobs:
@@ -12,12 +12,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # [핵심] 억지로 IPv6를 꺼버려서 IPv4로만 통신하게 만듭니다.
-      - name: Disable IPv6
+      # [핵심 수정] IPv6를 끄지 않고, IPv4를 '최우선'으로 사용하도록 순서만 바꿉니다.
+      # 이 설정이 있어야 "Network is unreachable" 에러가 사라집니다.
+      - name: Prefer IPv4 over IPv6
         run: |
-          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-          sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
+          sudo sed -i 's/#precedence ::ffff:0:0\/96  100/precedence ::ffff:0:0\/96  100/' /etc/gai.conf
 
       - name: Install PostgreSQL Client
         run: |
@@ -28,5 +27,5 @@ jobs:
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          # 접속 주소는 6543 포트를 그대로 사용합니다.
+          # 6543 포트를 그대로 사용하며, 위 설정 덕분에 IPv4로 안정적으로 접속합니다.
           psql "$DB_URL" -c "SELECT NOW();"
