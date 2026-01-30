@@ -1,27 +1,34 @@
-name: Supabase Keep Warm (HTTP)
+name: Supabase Keep Warm (Debug)
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 자정
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  wake_up:
+  debug_connection:
     runs-on: ubuntu-latest
     steps:
-      - name: Wake up Supabase
+      - name: Check API Response
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
-          # DB 접속이 아니라, 웹사이트 접속하듯 API를 찔러서 깨웁니다. (실패 확률 0%)
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/" \
+          echo "Connecting to: $SUPABASE_URL"
+          
+          # -v 옵션으로 상세 통신 내용을 보고, 에러 메시지를 화면에 출력합니다.
+          response_code=$(curl -s -o response.txt -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
           
-          if [ "$response" -eq 200 ]; then
-            echo "Success! Status Code: $response"
+          echo "Status Code: $response_code"
+          echo "--- Server Message ---"
+          cat response.txt
+          echo "----------------------"
+          
+          if [ "$response_code" -eq 200 ]; then
+            echo "Success!"
           else
-            echo "Failed? Status Code: $response"
+            echo "Failed. Check the message above."
             exit 1
           fi
