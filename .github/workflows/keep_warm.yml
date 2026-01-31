@@ -1,4 +1,4 @@
-name: Supabase Keep Warm(mixqbynkcstfjpmgujjp - "leehack21-hilee")
+name: Supabase Keep Warm (Multi)
 
 on:
   schedule:
@@ -6,23 +6,45 @@ on:
   workflow_dispatch:
 
 jobs:
-  wake_up:
+  wake_up_all:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Keep-Warm Request
+      - name: Wake up all projects
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          # 아까 만든 목록(Secret)을 불러옵니다.
+          PROJECTS_LIST: ${{ secrets.SUPABASE_PROJECTS }}
         run: |
-          # Supabase REST API 루트를 호출하여 인스턴스를 깨웁니다.
-          # service_role 키를 사용하므로 권한 문제없이 200 OK가 떨어집니다.
-          status_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/" \
-            -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY")
-
-          if [ "$status_code" -eq 200 ]; then
-            echo "✅ Success! Supabase is active."
-          else
-            echo "❌ Failed with status code: $status_code"
+          # 1. 목록이 비어있는지 확인
+          if [ -z "$PROJECTS_LIST" ]; then
+            echo "❌ 등록된 프로젝트가 없습니다. Secret을 확인하세요."
             exit 1
           fi
+
+          # 2. 한 줄씩 읽으면서 반복문(Loop) 실행
+          echo "$PROJECTS_LIST" | while read -r line; do
+            # 빈 줄은 무시
+            if [ -z "$line" ]; then continue; fi
+
+            # 공백을 기준으로 URL과 KEY를 쪼갭니다.
+            URL=$(echo "$line" | awk '{print $1}')
+            KEY=$(echo "$line" | awk '{print $2}')
+
+            echo "---------------------------------------------------"
+            echo "🚀 Waking up: $URL"
+
+            # 3. 요청 전송 (네트워크 오류 방지를 위해 -f 옵션 사용)
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X GET "$URL/rest/v1/" \
+              -H "apikey: $KEY" \
+              -H "Authorization: Bearer $KEY")
+
+            # 4. 결과 확인
+            if [ "$response" -eq 200 ]; then
+              echo "✅ Success! Supabase is active. (Status: 200)"
+            else
+              echo "⚠️ Failed! (Status: $response) - 키나 주소를 확인하세요."
+              # 여기서 실패해도 다음 프로젝트를 위해 멈추지 않고 계속 진행합니다.
+            fi
+          done
+          
+          echo "---------------------------------------------------"
+          echo "🎉 모든 작업 완료."
