@@ -1,9 +1,9 @@
-name: Supabase Multi-DB Backup
+name: Supabase Multi-DB Backup (PG17 Support)
 
 on:
   schedule:
-    - cron: '0 15 * * *' # 매일 한국 시간 00:00  (UTC 15:00)
-  workflow_dispatch:     # 버튼 눌러서 수동 실행 가능
+    - cron: '0 15 * * *'  # 매일 한국 시간 00:00  (UTC 15:00)
+  workflow_dispatch:                     # 버튼 눌러서 수동 실행 가능
 
 jobs:
   backup:
@@ -12,14 +12,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL Client
+      - name: Install PostgreSQL 17 Client
         run: |
+          # PostgreSQL 공식 저장소 추가 및 17 버전 설치
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y wget gnupg2
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Run Multi-DB Backup & Cleanup
         env:
-          # Secret에 반드시 위에서 새로 받은 'Pooler' 주소를 넣어야 합니다!
+          # 반드시 [Pooler 주소] + [인코딩된 비밀번호]가 들어간 Secret을 사용하세요!
           DB_TARGETS: "ProjectA:${{ secrets.DB_URL_PROJECT_A }} ProjectB:${{ secrets.DB_URL_PROJECT_B }}"
           RETENTION_COUNT: 7
         run: |
@@ -28,13 +33,13 @@ jobs:
             DB_URL=$(echo $target | cut -d':' -f2-)
             
             echo "------------------------------------------"
-            echo "Starting backup for: $DB_NAME"
+            echo "Starting backup for: $DB_NAME (using pg_dump 17)"
             
             mkdir -p "backups/$DB_NAME"
             TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
             FILENAME="backups/$DB_NAME/db-$TIMESTAMP.sql"
             
-            # [수정] 우회 로직 없이 깨끗하게 pg_dump 실행
+            # pg_dump 실행
             pg_dump "$DB_URL" > "$FILENAME"
             
             echo "Backup saved: $FILENAME"
@@ -51,7 +56,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add backups/
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Automated Multi-DB Backup: $(date +'%Y-%m-%d')"
+            git commit -m "Automated Multi-DB Backup (PG17): $(date +'%Y-%m-%d')"
             git push
           else
             echo "No changes to commit."
