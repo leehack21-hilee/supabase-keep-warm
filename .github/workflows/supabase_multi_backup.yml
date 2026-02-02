@@ -2,14 +2,14 @@ name: Supabase Multi-DB Backup
 
 on:
   schedule:
-    - cron: '0 15 * * *'
-  workflow_dispatch:
+    - cron: '0 15 * * *' # 매일 한국 시간 00:00 (UTC 15:00)
+  workflow_dispatch:     # 버튼 눌러서 수동 실행 가능
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install PostgreSQL Client
@@ -17,35 +17,48 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Run Multi-DB Backup
+      - name: Run Multi-DB Backup & Cleanup
         env:
+          # 여기에 DB 별칭과 Secret 이름을 매핑하세요 (공백으로 구분)
           DB_TARGETS: "ProjectA:${{ secrets.DB_URL_PROJECT_A }} ProjectB:${{ secrets.DB_URL_PROJECT_B }}"
-          RETENTION_COUNT: 7
+          RETENTION_COUNT: 7 # DB당 최신 7개만 유지
         run: |
           for target in $DB_TARGETS; do
+            # 1. 정보 분리
             DB_NAME=$(echo $target | cut -d':' -f1)
-            DB_URL=$(echo $target | cut -d':' -f2-)
+            ORIGIN_URL=$(echo $target | cut -d':' -f2-)
             
-            echo "Processing backup for $DB_NAME..."
+            echo "------------------------------------------"
+            echo "Starting backup for: $DB_NAME"
+            
+            # 2. [필수] IPv4 전용 GitHub 환경을 위한 NAT64 주소 변환
+            # .supabase.co를 .supabase.co.ipv4.nat64.net으로 강제 치환
+            FIXED_URL=$(echo $ORIGIN_URL | sed 's/\.supabase\.co/\.supabase\.co.ipv4.nat64.net/')
+            
+            # 3. 폴더 생성 및 파일명 정의
             mkdir -p "backups/$DB_NAME"
-            
             TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
             FILENAME="backups/$DB_NAME/db-$TIMESTAMP.sql"
             
-            # pg_dump 실행 시 IPv4 강제 옵션 및 타임아웃 방지 설정 추가
-            # 주소에 ?sslmode=disable 등이 없다면 자동으로 SSL을 시도합니다.
-            pg_dump "$DB_URL" > "$FILENAME"
+            # 4. 백업 실행
+            pg_dump "$FIXED_URL" > "$FILENAME"
+            echo "Backup saved: $FILENAME"
             
-            # 오래된 파일 정리
+            # 5. 오래된 백업 삭제 (Retention)
             cd "backups/$DB_NAME"
             ls -t db-*.sql | tail -n +$(($RETENTION_COUNT + 1)) | xargs -I {} rm -- {} || true
             cd ../..
           done
 
-      - name: Commit and Push
+      - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add backups/
-          # 변경사항이 있을 때만 커밋
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated Multi-DB Backup: $(date +'%Y-%m-%d')" && git push)
+          # 변경사항(새 백업)이 있을 때만 커밋 및 푸시
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Automated Multi-DB Backup: $(date +'%Y-%m-%d')"
+            git push
+          else
+            echo "No changes to commit."
+          fi
