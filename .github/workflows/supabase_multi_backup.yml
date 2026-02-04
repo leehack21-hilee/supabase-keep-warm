@@ -39,7 +39,7 @@ jobs:
             
             mkdir -p "backups/$DB_NAME"
             TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-            FILENAME="backups/$DB_NAME/db-$TIMESTAMP.sql"
+            FILENAME="backups/$DB_NAME/db-$TIMESTAMP.sql.gz"
             
             # [핵심 변경] 시스템 기본 pg_dump 대신 17 버전의 절대 경로를 직접 호출합니다.
             # [수정] pg_dump 결과를 gzip으로 압축하여 저장
