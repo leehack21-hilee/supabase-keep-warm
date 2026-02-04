@@ -1,4 +1,4 @@
-name: Supabase Multi-DB Backup (PG17 Support)
+name: Supabase Multi-DB Backup (PG17 Support Gzip Compression)
 
 on:
   schedule:
@@ -42,13 +42,14 @@ jobs:
             FILENAME="backups/$DB_NAME/db-$TIMESTAMP.sql"
             
             # [핵심 변경] 시스템 기본 pg_dump 대신 17 버전의 절대 경로를 직접 호출합니다.
-            /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" > "$FILENAME"
+            # [수정] pg_dump 결과를 gzip으로 압축하여 저장
+            /usr/lib/postgresql/17/bin/pg_dump "$DB_URL"| gzip > "$FILENAME"
             
-            echo "Backup saved: $FILENAME"
+            echo "Backup saved(compressed): $FILENAME"
             
             # 최신 N개 유지 로직
             cd "backups/$DB_NAME"
-            ls -t db-*.sql | tail -n +$(($RETENTION_COUNT + 1)) | xargs -I {} rm -- {} || true
+            ls -t db-*.sql.gz | tail -n +$(($RETENTION_COUNT + 1)) | xargs -I {} rm -- {} || true
             cd ../..
           done
 
@@ -58,7 +59,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add backups/
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Automated Multi-DB Backup (PG17 Fixed): $(date +'%Y-%m-%d')"
+            git commit -m "Automated Compressed Backup (PG17): $(date +'%Y-%m-%d')"
             git push
           else
             echo "No changes to commit."
